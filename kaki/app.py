@@ -10,6 +10,7 @@ original_argv = sys.argv
 
 import os
 import sys
+import time
 import traceback
 from os.path import join, realpath
 from fnmatch import fnmatch
@@ -224,6 +225,7 @@ class App(BaseApp):
             return
         Logger.info("{}: Autoreloader activated".format(self.appname))
         rootpath = self.get_root_path()
+        self.modifiedevent_time = time.time()
         self.w_handler = handler = FileSystemEventHandler()
         handler.dispatch = self._reload_from_watchdog
         self._observer = observer = Observer()
@@ -241,7 +243,10 @@ class App(BaseApp):
         from watchdog.events import FileModifiedEvent
         if not isinstance(event, FileModifiedEvent):
             return
-
+        ## Discard the same message for two seconds
+        run_time = time.time() - self.modifiedevent_time
+        if run_time <2: return
+        
         for pat in self.AUTORELOADER_IGNORE_PATTERNS:
             if fnmatch(event.src_path, pat):
                 return
@@ -249,6 +254,7 @@ class App(BaseApp):
         if event.src_path.endswith(".py"):
             # source changed, reload it
             try:
+                self.modifiedevent_time = time.time()
                 Builder.unload_file(event.src_path)
                 self._reload_py(event.src_path)
             except Exception as e:
